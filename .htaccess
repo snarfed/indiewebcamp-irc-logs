@@ -1,0 +1,9 @@
+RewriteEngine on
+RewriteRule ^$ http://indiewebcamp.com/IRC [QSA,L]
+RewriteRule ([0-9]{4}-[0-9]{2}-[0-9]{2}) logs.php?date=$1 [QSA,L]
+RewriteRule ([0-9]{4})-([0-9]{3}) logs.php?ordinalyear=$1&ordinaldate=$2 [QSA,L]
+
+RewriteRule ^logs$ index.php
+RewriteRule ^feed.atom$ feed.php [QSA,L]
+RewriteRule ^today$ today.php
+
