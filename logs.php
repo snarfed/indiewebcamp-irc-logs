@@ -1,33 +1,67 @@
 <?php
 include('inc.php');
 
+refreshUsers();
+loadUsers();
 
-if(array_key_exists('ordinaldate', $_GET)) {
-	$date = date('Y-m-d', mktime(0,0,0, 1,$_GET['ordinaldate'],$_GET['ordinalyear']));
-	$dateTitle = $_GET['ordinalyear'] . '-' . $_GET['ordinaldate'];
+if(array_key_exists('timestamp', $_GET)) {
+
+	$timestamp = $_GET['timestamp'];
+	
+	$current = false;
+	$prev = false;
+	$next = false;
+	
+	$query = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp = :timestamp AND hide=0');
+	$query->bindParam(':timestamp', $timestamp);
+	$query->execute();
+	foreach($query as $q)
+		$current = $q;
+	
+	$query = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp < :timestamp AND hide=0
+		ORDER BY timestamp DESC LIMIT 4');
+	$query->bindParam(':timestamp', $timestamp);
+	$query->execute();
+	foreach($query as $q) 
+		$prev[] = $q;
+	if($prev)
+		$prev = array_reverse($prev);
+
+	$query = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp > :timestamp AND hide=0
+		ORDER BY timestamp ASC LIMIT 4');
+	$query->bindParam(':timestamp', $timestamp);
+	$query->execute();
+	foreach($query as $q) 
+		$next[] = $q;
+	
+	
+	$dateTitle = $current['day'];
+	$currentDay = $current['day'];
+	
+} else {
+	
+	if(array_key_exists('ordinaldate', $_GET)) {
+		$date = date('Y-m-d', mktime(0,0,0, 1,$_GET['ordinaldate'],$_GET['ordinalyear']));
+		$dateTitle = $_GET['ordinalyear'] . '-' . $_GET['ordinaldate'];
+	}
+	else {
+		$date = $_GET['date'];
+		$dateTitle = $date;
+	}
+	$currentDay = $date;
+	
+	$tomorrow = date('Y-m-d', strtotime($date)+86400);
+	$yesterday = date('Y-m-d', strtotime($date)-86400);
+	
+	if(strtotime($date)+86400 > time())
+		$tomorrow = false;
+	
+	
+	$logs = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND day=:day AND hide=0 ORDER BY datestamp');
+	$logs->bindParam(':day', $date);
+	$logs->execute();
+
 }
-else {
-	$date = $_GET['date'];
-	$dateTitle = $date;
-}
-
-$tomorrow = date('Y-m-d', strtotime($date)+86400);
-$yesterday = date('Y-m-d', strtotime($date)-86400);
-
-if(strtotime($date)+86400 > time())
-	$tomorrow = false;
-
-
-$logs = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND day=:day AND hide=0 ORDER BY datestamp');
-$logs->bindParam(':day', $date);
-$logs->execute();
-
-$types = array(
-	2 => 'message',
-	64 => 'join',
-	'wiki' => 'wiki',
-	'twitter' => 'twitter'
-);
 
 ?>
 <html>
@@ -55,7 +89,7 @@ $types = array(
 	a {
 		color: #222299;
 	}
-	.nick {
+	.nick, a.author {
 		color: #a13d3d;
 	}
 	
@@ -119,16 +153,38 @@ $types = array(
 		}
 	}
 	
+	.featured {
+		font-size: 130%;
+		margin: 20px 0;
+	}
+	
 	</style>
 	<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
-	
+	<link rel="pingback" href="http://pingback.me/indiewebcamp/xmlrpc" />
+	<link href="http://pingback.me/indiewebcamp/webmention" rel="http://webmention.org/" />
 </head>
 <body>
 
 <div class="topbar">
 	<h2><a href="/IRC#Logs">#indiewebcamp</a></h2>
-	<h3><?= $dateTitle ?></h3>
+	<h3><a href="/irc/<?= $currentDay ?>"><?= $dateTitle ?></a></h3>
 	<ul class="right">
+	<?php if(array_key_exists('timestamp', $_GET)) { ?>
+		<li>
+			<?php if($prev): $p = $prev[count($prev)-1]; ?>
+				<a href="/irc/<?= $p['day'] ?>/line/<?= $p['timestamp'] ?>" rel="prev">Back</a>
+			<?php else: ?>
+				<span class="disabled">Back</span>
+			<?php endif; ?>
+		</li>
+		<li>
+			<?php if($next): $n = $next[0]; ?>
+				<a href="/irc/<?= $n['day'] ?>/line/<?= $n['timestamp'] ?>" rel="next">Next</a>
+			<?php else: ?>
+				<span class="disabled">Next</span>
+			<?php endif; ?>
+		</li>
+	<?php } else { ?>
 		<li>
 			<?php if($yesterday): ?>
 				<a href="./<?= $yesterday ?>" rel="prev">Prev</a>
@@ -143,37 +199,35 @@ $types = array(
 				<span class="disabled">Next</span>
 			<?php endif; ?>
 		</li>
+	<?php } ?>
 	</ul>
 	<div class="clear"></div>
 </div>
 
 <div class="logs">
-	<div id="top" class="skip"><a href="#bottom">jump to bottom</a></div>
-<?php
-while($line=$logs->fetch()) {
-	$who = '&lt;' . $line['nick'] . '&gt;';
-	$line['line'] = stripIRCControlChars($line['line']);
-
-	if(preg_match('/^\[\[.+\]\].+http.+\*.+\*.*/', $line['line']))
-		$line['type'] = 'wiki';
-	
-	if(preg_match('/\[http:\/\/twitter.com\/([^\]]+)\] /', $line['line'], $match)) {
-		$line['type'] = 'twitter';
-		$line['line'] = str_replace($match[0], '', $line['line']);
-		$who = '&lt;<a href="http://twitter.com/' . $match[1] . '">@' . $match[1] . '</a>&gt;';
-	}
-
-	echo '<div id="t' . $line['timestamp'] . '" class="line msg-' . $types[$line['type']] . '">';
-		echo '<a href="#t' . $line['timestamp'] . '" class="time">' . date('H:i', $line['timestamp']) . '</a> ';
-
-		if($line['type'] != 64)
-			echo '<span class="nick">' . $who . '</span> ';
-
-		echo filterText($line['line']);
-	echo "</div>\n";
-}
-?>
-	<div id="bottom" class="skip"><a href="#top">jump to top</a></div>
+	<?php if(array_key_exists('timestamp', $_GET)) { ?>
+		<?php
+		foreach($prev as $line) {
+			echo formatLine($line, false);
+		}
+		?>
+		<div class="featured">
+			<?= formatLine($current); ?>
+		</div>
+		<?php
+		foreach($next as $line) {
+			echo formatLine($line, false);
+		}
+		?>
+	<?php } else { ?>
+		<div id="top" class="skip"><a href="#bottom">jump to bottom</a></div>
+		<?php
+		while($line=$logs->fetch()) {
+			echo formatLine($line);
+		}
+		?>
+		<div id="bottom" class="skip"><a href="#top">jump to top</a></div>
+	<?php } ?>
 </div>
 
 <script type="text/javascript" src="jquery-1.10.1.min.js"></script>

@@ -6,6 +6,13 @@ define('PDO_DSN', 'mysql:dbname=nerdhaus;host=db.node');
 define('PDO_USER', 'cronos');
 define('PDO_PASS', 'node');
 
+$types = array(
+	2 => 'message',
+	64 => 'join',
+	'wiki' => 'wiki',
+	'twitter' => 'twitter'
+);
+
 
 function db()
 {
@@ -72,3 +79,86 @@ function trimString($str, $length, $allow_word_break=false) {
 		}
 	}
 }
+
+function formatLine($line, $mf=true) {
+	global $types;
+	ob_start();
+	
+	$user = userForNick($line['nick']);
+	
+	if($user) {
+		$who = '&lt;<span class="' . ($mf ? 'p-author h-card' : '') . '">'
+			. '<a href="' . @$user->properties->url[0] . '" class="author ' . ($mf ? 'p-nickname p-name u-url' : '') . '">' . $line['nick'] . '</a>'
+			. '</span>&gt;';
+	} else {
+		$who = '&lt;<span class="' . ($mf ? 'p-author h-card' : '') . '">'
+			. '<span class="' . ($mf ? 'p-nickname p-name' : '') . '">' . $line['nick'] . '</span>'
+			. '</span>&gt;';
+	}
+			
+	$line['line'] = stripIRCControlChars($line['line']);
+
+	if(preg_match('/^\[\[.+\]\].+http.+\*.+\*.*/', $line['line']))
+		$line['type'] = 'wiki';
+	
+	if(preg_match('/^https?:\/\/twitter.com\/([^ ]+) /', $line['line'], $match)) {
+		$line['type'] = 'twitter';
+		$line['line'] = str_replace(array($match[0].':: ',$match[0]), '', $line['line']);
+		$who = '&lt;<a href="http://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card p-url' : '') . '">@<span class="p-name p-nickname">' . $match[1] . '</span></a>&gt;';
+	}
+
+	# TODO: localize the timestamp to the person who spoke
+	if($user && property_exists($user->properties, 'tz')) {
+		$tz = $user->properties->tz[0];
+	} else {
+		$tz = 'America/Los_Angeles';
+	}
+	$date = new DateTime();
+	$date->setTimestamp($line['timestamp']);
+	$date->setTimezone(new DateTimeZone($tz));
+
+	$url = 'http://' . $_SERVER['SERVER_NAME'] . '/irc/' . date('Y-m-d', $line['timestamp']) . '/line/' . $line['timestamp'];
+	echo '<div id="t' . $line['timestamp'] . '" class="' . ($mf ? 'h-entry' : '') . ' line msg-' . $types[$line['type']] . '">';
+		echo '<time class="dt-published" datetime="' . $date->format('c') . '">';
+			echo '<a href="' . $url . '" class="' . ($mf ? 'u-url' : '') . ' time" >' . date('H:i', $line['timestamp']) . '</a>';
+		echo '</time> ';
+
+		if($line['type'] != 64)
+			echo '<span class="nick">' . $who . '</span> ';
+
+		echo '<span class="' . ($mf ? 'p-content p-name' : '') . '">' . filterText($line['line']) . '</span>';
+	echo "</div>\n";
+	
+	return ob_get_clean();
+}
+
+function refreshUsers() {
+	if(filemtime('users.json') < time() - 60) {
+		$users = file_get_contents('http://pin13.net/mf2/?url=http%3A%2F%2Findiewebcamp.com%2Firc-people');
+		if(trim($users))
+			file_put_contents('users.json', $users);
+	}
+}
+
+$users = array();
+
+function loadUsers() {
+	global $users;
+	$data = json_decode(file_get_contents('users.json'));
+	foreach($data->items as $item) {
+		if(in_array('h-card', $item->type)) {
+			$users[] = $item;
+		}
+	}
+}
+
+function userForNick($nick) {
+	global $users;
+	foreach($users as $u) {
+		if(@strtolower($u->properties->nickname[0]) == strtolower($nick)) {
+			return $u;
+		}
+	}
+	return null;
+}
+
