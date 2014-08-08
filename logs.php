@@ -4,36 +4,75 @@ include('inc.php');
 refreshUsers();
 loadUsers();
 
+function respondFromCache($cacheFile) {
+	return;
+	if(file_exists($cacheFile)) {
+		readfile($cacheFile);
+		die();
+	}
+}
+
+$isBot = array_key_exists('HTTP_USER_AGENT', $_SERVER) && preg_match('/(bot|spider|crawl|slurp)/i', $_SERVER['HTTP_USER_AGENT']);
+
+
 if(array_key_exists('timestamp', $_GET)) {
+
+	// Check the cache
+	$cacheFile = dirname(__FILE__).'/cache/'.intval($_GET['timestamp']).'.json';
 
 	$timestamp = $_GET['timestamp'];
 	
 	$current = false;
 	$prev = false;
 	$next = false;
-	
-	$query = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp = :timestamp AND hide=0');
-	$query->bindParam(':timestamp', $timestamp);
-	$query->execute();
-	foreach($query as $q)
-		$current = $q;
-	
-	$query = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp < :timestamp AND hide=0
-		ORDER BY timestamp DESC LIMIT 4');
-	$query->bindParam(':timestamp', $timestamp);
-	$query->execute();
-	foreach($query as $q) 
-		$prev[] = $q;
-	if($prev)
-		$prev = array_reverse($prev);
 
-	$query = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp > :timestamp AND hide=0
-		ORDER BY timestamp ASC LIMIT 4');
-	$query->bindParam(':timestamp', $timestamp);
-	$query->execute();
-	foreach($query as $q) 
-		$next[] = $q;
+	if(file_exists($cacheFile)) {
+		$cache = json_decode(file_get_contents($cacheFile), true);
+		$current = $cache['current'];
+		$next = $cache['next'];
+		$prev = $cache['prev'];
+	} else {
+		
+		$query = db()->prepare('SELECT id,timestamp,line,type,nick,day FROM irclog WHERE channel="#indiewebcamp" AND timestamp = :timestamp AND hide=0');
+		$query->bindParam(':timestamp', $timestamp);
+		$query->execute();
+		while($q = $query->fetch(PDO::FETCH_ASSOC))
+			$current = $q;
+		
+		// Don't bother retrieving lines around the linked line for crawlers
+		$query = db()->prepare('SELECT id,timestamp,line,type,nick,day 
+		  FROM irclog 
+		  WHERE channel="#indiewebcamp" AND timestamp <= :timestamp AND id < :id 
+		    AND hide=0
+			ORDER BY timestamp DESC LIMIT 4');
+		$query->bindParam(':id', $current['id']);
+		$query->bindParam(':timestamp', $timestamp);
+		$query->execute();
+		while($q = $query->fetch(PDO::FETCH_ASSOC)) 
+			$prev[] = $q;
+		if($prev)
+			$prev = array_reverse($prev);
 	
+		$query = db()->prepare('SELECT id,timestamp,line,type,nick,day 
+		  FROM irclog 
+		  WHERE channel="#indiewebcamp" AND timestamp >= :timestamp AND id > :id
+		    AND hide=0
+			ORDER BY timestamp ASC LIMIT 4');
+		$query->bindParam(':id', $current['id']);
+		$query->bindParam(':timestamp', $timestamp);
+		$query->execute();
+		while($q = $query->fetch(PDO::FETCH_ASSOC)) 
+			$next[] = $q;
+  
+    if($next) {
+      // only cache if there are future lines
+  		file_put_contents($cacheFile, json_encode(array(
+  			'current' => $current,
+  			'next' => $next,
+  			'prev' => $prev
+  		)));
+		}
+	}
 	
 	$dateTitle = $current['day'];
 	$currentDay = $current['day'];
@@ -56,20 +95,34 @@ if(array_key_exists('timestamp', $_GET)) {
 	if(strtotime($date)+86400 > time())
 		$tomorrow = false;
 	
+	#$cacheFile = dirname(__FILE__).'/cache/'.intval($_GET['timestamp']).'.html';
+	#respondFromCache($cacheFile);
 	
-	$logs = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND day=:day AND hide=0 ORDER BY datestamp');
-	$logs->bindParam(':day', $date);
+	$logs = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp >= :min AND timestamp < :max AND hide=0 ORDER BY datestamp');
+	#$logs->bindParam(':day', $date);
+	$logs->bindParam(':min', strtotime($date.' 00:00:00'));
+	$logs->bindParam(':max', strtotime($date.' 23:59:59'));
 	$logs->execute();
 
 }
 
+
+if(
+  (array_key_exists('HTTP_USER_AGENT', $_SERVER) && preg_match('/(curl)/i', $_SERVER['HTTP_USER_AGENT']))
+) {
+  include('logs-text.php');
+  die();
+}
+
+header('Content-Type: text/html; charset=utf-8');
+ob_start();
 ?>
 <html>
 <head>
 	<title>#indiewebcamp <?=$dateTitle?></title>
 	<style type="text/css">
 	body {
-		font-family: courier, courier new, fixed-width;
+		font-family: monaco, courier new, fixed-width;
 		font-size: 10pt;
 		margin: 0;
 		padding: 0;
@@ -77,20 +130,30 @@ if(array_key_exists('timestamp', $_GET)) {
 	a.time {
 		color: #999;
 	}
+	a.hash {
+  	color: #BBB;
+  	text-decoration: none;
+	}
 	.msg-join, .msg-join a {
 		color: #bbb;
 	}
 	.msg-wiki, .msg-wiki a {
 		color: #542b76;
 	}
+	.msg-twitter.retweet {
+		opacity: 0.5;
+	}
 	.msg-twitter, .msg-twitter a {
-		color: #345e84;
+		color: #2087e1;
 	}
 	a {
 		color: #222299;
 	}
 	.nick, a.author {
 		color: #a13d3d;
+	}
+	.msg-twitter a.author {
+  	color: #2087e1;
 	}
 	
 	.topbar {
@@ -153,6 +216,10 @@ if(array_key_exists('timestamp', $_GET)) {
 		}
 	}
 	
+	.line:hover {
+  	background-color: #fffdeb;
+	}
+	
 	.featured {
 		font-size: 130%;
 		margin: 20px 0;
@@ -160,18 +227,30 @@ if(array_key_exists('timestamp', $_GET)) {
 	
 	</style>
 	<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
-	<link rel="pingback" href="http://pingback.me/indiewebcamp/xmlrpc" />
-	<link href="http://pingback.me/indiewebcamp/webmention" rel="http://webmention.org/" />
+	<link rel="pingback" href="http://webmention.io/indiewebcamp/xmlrpc" />
+	<link href="http://webmention.io/indiewebcamp/webmention" rel="webmention" />
 </head>
 <body>
 
 <div class="topbar">
-	<h2><a href="/IRC#Logs">#indiewebcamp</a></h2>
+	<h2><a href="/IRC/logs">#indiewebcamp</a></h2>
 	<h3><a href="/irc/<?= $currentDay ?>"><?= $dateTitle ?></a></h3>
 	<ul class="right">
+                <li>
+                  <form action="http://www.google.com/search" method="get" style="margin-bottom: 0;">
+                    <input type="text" name="q" placeholder="Search">
+                    <input type="submit" value="Search">
+                    <input type="hidden" name="as_sitesearch" value="indiewebcamp.com/irc">
+                  </form>
+                </li>
 	<?php if(array_key_exists('timestamp', $_GET)) { ?>
 		<li>
-			<?php if($prev): $p = $prev[count($prev)-1]; ?>
+			<?php if($prev): 
+			  // special case for multiple lines in the same second
+			  $p = $prev[count($prev)-1];
+			  if($p['timestamp'] == $current['timestamp'] && array_key_exists(count($prev)-2, $prev))
+			    $p = $prev[count($prev)-2];
+			?>
 				<a href="/irc/<?= $p['day'] ?>/line/<?= $p['timestamp'] ?>" rel="prev">Back</a>
 			<?php else: ?>
 				<span class="disabled">Back</span>
@@ -207,36 +286,61 @@ if(array_key_exists('timestamp', $_GET)) {
 <div class="logs">
 	<?php if(array_key_exists('timestamp', $_GET)) { ?>
 		<?php
-		foreach($prev as $line) {
-			echo formatLine($line, false);
+		$lines = 1;
+		
+		if(!$isBot && $prev) {
+			foreach($prev as $line) {
+  			$lines++;
+				echo formatLine($line, false);
+			}
 		}
+
 		?>
 		<div class="featured">
 			<?= formatLine($current); ?>
 		</div>
 		<?php
-		foreach($next as $line) {
-			echo formatLine($line, false);
+		
+		if(!$isBot && $next) {
+			foreach($next as $line) {
+  			$lines++;
+				echo formatLine($line, false);
+			}
 		}
+		
 		?>
 	<?php } else { ?>
 		<div id="top" class="skip"><a href="#bottom">jump to bottom</a></div>
 		<?php
+		$lines = 0;
 		while($line=$logs->fetch()) {
 			echo formatLine($line);
+			$lines++;
 		}
 		?>
 		<div id="bottom" class="skip"><a href="#top">jump to top</a></div>
 	<?php } ?>
 </div>
 
-<script type="text/javascript" src="jquery-1.10.1.min.js"></script>
+<script type="text/javascript" src="/irc/jquery-1.10.1.min.js"></script>
 <script type="text/javascript">
 $(function(){
 	if(window.location.hash) { // has a # already, convenient :)
 		$(window.location.hash).addClass('hilite');
 	}
+	window.addEventListener("hashchange", function(){
+	  $(".line").removeClass('hilite');
+	  console.log(window.location.hash);
+		$(window.location.hash).addClass('hilite');
+	}, false);
 });
 </script>
 </body>
 </html>
+<?php
+
+if($lines == 0) {
+  header('HTTP/1.1 404 Not Found');
+}
+
+echo ob_get_clean();

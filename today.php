@@ -1,4 +1,6 @@
 <?php
+date_default_timezone_set('America/Los_Angeles');
+
 if(array_key_exists('bookmark', $_GET)) {
 	?>
 		<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
@@ -7,7 +9,7 @@ if(array_key_exists('bookmark', $_GET)) {
 	die();
 }
 
-if($_SERVER['HTTP_REFERER'] == 'http://indiewebcamp.com/irc/today?bookmark') {
+if(array_key_exists('HTTP_REFERER', $_SERVER) && $_SERVER['HTTP_REFERER'] == 'http://indiewebcamp.com/irc/today?bookmark') {
 	?>
 	<title>IndieWebCamp IRC</title>
 	<meta name="viewport" content="width=device-width,initial-scale=1">

@@ -114,7 +114,7 @@ class Regex_Twitter extends Regex
 
 class Regex_URL extends Regex
 {
-    public static $expression = '|(https?://[^\s]+)|';
+    public static $expression = '|(https?:\/\/[^\s]+(?<!\)))|';
     public static $replacement = '<a href="$1">$1</a>';
 
     /**
@@ -132,6 +132,29 @@ class Regex_URL extends Regex
         return parent::replace($text);
     }
 }
+
+
+class Regex_WikiPage extends Regex
+{
+    public static $expression = array('/(^|\s)(\/[a-z0-9-_]+)/i','/\[\[([^\]]+)\]\]/');
+    public static $replacement = array('$1<a href="http://indiewebcamp.com$2">$2</a>','[[<a href="http://indiewebcamp.com/$1">$1</a>]]');
+
+    /**
+     * Returns the raw URL found in $text
+     * @param string $text
+     * @return string The matched text
+     */
+    public static function get($text)
+    {
+        return self::_get($text);
+    }
+
+    public static function replace($text)
+    {
+        return parent::replace($text);
+    }
+}
+
 
 class Regex_Email extends Regex
 {
@@ -211,4 +234,3 @@ class Regex_EmailRecipient extends Regex
     }
 }
 
-?>
