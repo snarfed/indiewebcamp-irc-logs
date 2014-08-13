@@ -123,7 +123,7 @@ ob_start();
 	<style type="text/css">
 	body {
 		font-family: "Helvetica Neue", sans-serif;
-		font-size: 10pt;
+		font-size: 16px;
 		margin: 0;
 		padding: 0;
 	}
@@ -136,6 +136,7 @@ ob_start();
 	}
 	.line {
   	min-height: 22px;
+		margin-bottom: 4px;
 	}
 	.msg-join, .msg-join a {
 		color: #bbb;
@@ -224,13 +225,17 @@ ob_start();
 		margin-top: 12px;
 	}
 	
-	@media (max-width: 320px) and (orientation: portrait) {
+	@media (max-width: 640px) {
 		body {
 			width: 100%;
-			font-size: 11pt;
+			font-size: 12px;
 		}
 		.line {
-			margin-bottom: 6px;
+			margin-bottom: 4px;
+		}
+		.avatar img {
+  		width: 16px;
+  		height: 16px;
 		}
 	}
 	
@@ -244,7 +249,7 @@ ob_start();
 	}
 	
 	</style>
-	<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
 	<link rel="pingback" href="http://webmention.io/indiewebcamp/xmlrpc" />
 	<link href="http://webmention.io/indiewebcamp/webmention" rel="webmention" />
 </head>
