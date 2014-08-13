@@ -136,7 +136,7 @@ class Regex_URL extends Regex
 
 class Regex_WikiPage extends Regex
 {
-    public static $expression = array('/(^|\s)(\/[a-z0-9-_]+)/i','/\[\[([^\]]+)\]\]/');
+    public static $expression = array('/(^|\s)(\/[^ ]+)/i','/\[\[([^\]]+)\]\]/');
     public static $replacement = array('$1<a href="http://indiewebcamp.com$2">$2</a>','[[<a href="http://indiewebcamp.com/$1">$1</a>]]');
 
     /**

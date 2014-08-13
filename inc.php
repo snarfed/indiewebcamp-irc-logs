@@ -91,26 +91,72 @@ function formatLine($line, $mf=true) {
 	$user = userForNick($line['nick']);
 	$permalink = false;
 
+  $blank_avatar = '<div class="avatar" style="opacity: .20;"><img src="/irc/user.svg" width="20" height="20"></div>';
+  $avatar = $blank_avatar;
+
 	if($user) {
-		$who = '&lt;<span class="' . ($mf ? 'p-author h-card' : '') . '">'
+	  if(property_exists($user->properties, 'photo')) {
+  	  $avatar = '<div class="avatar"><img src="' . $user->properties->photo[0] . '" width="20" height="20"></div>';
+	  }
+		$who = $avatar . '<span class="' . ($mf ? 'p-author h-card' : '') . '">'
 			. '<a href="' . @$user->properties->url[0] . '" class="author ' . ($mf ? 'p-nickname p-name u-url' : '') . '">' . $line['nick'] . '</a>'
-			. '</span>&gt;';
+			. '</span>';
 	} else {
-		$who = '&lt;<span class="' . ($mf ? 'p-author h-card' : '') . '">'
+		$who = $avatar . '<span class="' . ($mf ? 'p-author h-card' : '') . '">'
 			. '<span class="' . ($mf ? 'p-nickname p-name' : '') . '">' . $line['nick'] . '</span>'
-			. '</span>&gt;';
+			. '</span>';
 	}
 			
 	$line['line'] = stripIRCControlChars($line['line']);
 
-	if(preg_match('/^\[\[.+\]\].+http.+\*.+\*.*/', $line['line']))
+  // Wiki edits
+	if(preg_match('/^\[\[(?<page>.+)\]\](?: (?<type>[!NM]*|delete))? (?<url>.+) \* (?<user>.+) \* (?:\((?<size>[+-]\d+)\))?(?:deleted)?(?<comment>.*)/', $line['line'], $match)) {
 		$line['type'] = 'wiki';
+		$user = userForHost($match['user']);
+
+		if($user) {
+  	  if(property_exists($user->properties, 'photo')) {
+    	  $avatar = '<div class="avatar"><img src="' . $user->properties->photo[0] . '" width="20" height="20"></div>';
+  	  }	else {
+    	  $avatar = $blank_avatar;
+  	  }
+  		$who = $avatar . '<span class="' . ($mf ? 'p-author h-card' : '') . '">'
+  		  . '<a class="author ' . ($mf ? 'p-nickname p-name' : '') . '" href="http://' . strtolower($match['user']) . '">' . strtolower($match['user']) . '</a>'
+  		  . '</span>';
+		} else {
+  		$who = $blank_avatar . '<span class="' . ($mf ? 'p-author h-card' : '') . '">'
+  		  . '<a class="author ' . ($mf ? 'p-nickname p-name' : '') . '" href="http://' . strtolower($match['user']) . '">' . strtolower($match['user']) . '</a>'
+  		  . '</span>';
+		}
+
+		if(trim($match['url']) == 'delete')
+		  $action = 'deleted';
+		elseif(strpos($match['type'], 'N') !== false)
+		  $action = 'created';
+		else
+		  $action = 'edited';
+
+		if($action == 'deleted') {
+  		if(preg_match('/"\[\[(.+)\]\]": (.+)/', $match['comment'], $dmatch)) {
+    		$match['page'] = $dmatch[1];
+    		$match['comment'] = $dmatch[2];
+  		}
+  		$line['diff'] = 'http://indiewebcamp.com/Special:Log/delete';
+		} else {
+      $line['diff'] = $match['url'];
+		}
+		
+		$match['page'] = str_replace(' ', '_', $match['page']);
+
+		$line['line'] = $action . ' /' . $match['page'] . ($action == 'deleted' ? '' : ' (' . ($match['size']) . ')') . (trim($match['comment']) ? ' "' . trim($match['comment']) . '"' : '');
+  }
 
 	// Old twitter citations	
 	if(preg_match('/^https?:\/\/twitter.com\/([^ ]+) /', $line['line'], $match)) {
 		$line['type'] = 'twitter';
 		$line['line'] = str_replace(array($match[0].':: ',$match[0]), '', $line['line']);
-		$who = '<a href="http://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card p-url' : '') . '">@<span class="p-name p-nickname">' . $match[1] . '</span></a>';
+		$avatar = '<div class="avatar"><img src="http://twitter.com/' . $match[1] . '/profile_image" width="20"></div>';
+		$who = $avatar . '<a href="http://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card p-url' : '') . '">@<span class="p-name p-nickname">' . $match[1] . '</span></a>';
 	}
 
 	// New tweets
@@ -118,9 +164,16 @@ function formatLine($line, $mf=true) {
 		$line['type'] = 'twitter';
 		$line['line'] = $match[2];
 		$permalink = $match[3];
-		$who = '<a href="https://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card' : '') . '">@<span class="p-name p-nickname">' . $match[1] . '</span></a>';
+		$avatar = '<div class="avatar"><img src="http://twitter.com/' . $match[1] . '/profile_image" width="20"></div>';
+		$who = $avatar . '<a href="https://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card' : '') . '">@<span class="p-name p-nickname">' . $match[1] . '</span></a>';
 	}
 
+  // Ugly hack for Loqi ACTIONs
+  if($line['nick'] == 'Loqi') {
+    if(preg_match('/^ACTION (.+)/', $line['line'], $match)) {
+      $line['line'] = $match[1];
+    }
+  }
 
 	# localize the timestamp to the person who spoke
 	if($user && property_exists($user->properties, 'tz')) {
@@ -129,15 +182,15 @@ function formatLine($line, $mf=true) {
 		$tz = 'America/Los_Angeles';
 	}
 	$date = new DateTime();
-	$date->setTimestamp($line['timestamp']);
+	$date->setTimestamp(round($line['timestamp']/1000));
 	try {
 		$date->setTimezone(new DateTimeZone($tz));
 	} catch(Exception $e) {
 		$date->setTimezone(new DateTimeZone('America/Los_Angeles'));
 	}
 
-	$url = 'http://' . $_SERVER['SERVER_NAME'] . '/irc/' . date('Y-m-d', $line['timestamp']) . '/line/' . $line['timestamp'];
-	$urlInContext = 'http://' . $_SERVER['SERVER_NAME'] . '/irc/' . date('Y-m-d', $line['timestamp']) . '#t' . $line['timestamp'];
+	$url = 'http://' . $_SERVER['SERVER_NAME'] . '/irc/' . date('Y-m-d', round($line['timestamp']/1000)) . '/line/' . $line['timestamp'];
+	$urlInContext = 'http://' . $_SERVER['SERVER_NAME'] . '/irc/' . date('Y-m-d', round($line['timestamp']/1000)) . '#t' . $line['timestamp'];
 	
 	// Different css for retweets
 	$classes = array();
@@ -148,7 +201,7 @@ function formatLine($line, $mf=true) {
 	  echo '<a href="' . $urlInContext . '" class="hash">#</a> ';
 	
 		echo '<time class="dt-published" datetime="' . $date->format('c') . '">';
-			echo '<a href="' . $url . '" class="' . ($mf ? 'u-url' : '') . ' time" >' . date('H:i', $line['timestamp']) . '</a>';
+			echo '<a href="' . $url . '" class="' . ($mf ? 'u-url' : '') . ' time" >' . date('H:i', round($line['timestamp']/1000)) . '</a>';
 		echo '</time> ';
 
 		if($line['type'] != 64)
@@ -160,6 +213,8 @@ function formatLine($line, $mf=true) {
 		
 		if($line['type'] == 'twitter') {
   		echo ' (<a href="' . $permalink . '" class="u-url">' . preg_replace('/https?:\/\//', '', $permalink) . '</a>)';
+		} elseif($line['type'] == 'wiki') {
+  		echo ' (<a href="' . $line['diff'] . '" class="u-url">view diff</a>)';
 		}
 		
 	echo "</div>\n";
@@ -180,8 +235,8 @@ $users = array();
 function loadUsers() {
 	global $users;
 	$data = json_decode(file_get_contents('users.json'));
-	if(property_exists($data, 'items') && property_exists($data->items[0], 'children')) {
-  	foreach($data->items[0]->children as $item) {
+	if(property_exists($data, 'items') && property_exists($data->items[1], 'children')) {
+  	foreach($data->items[1]->children as $item) {
   		if(in_array('h-card', $item->type)) {
   			$users[] = $item;
   		}
@@ -194,6 +249,18 @@ function userForNick($nick) {
 
 	foreach($users as $u) {
 		if(@strtolower($u->properties->nickname[0]) == strtolower($nick)) {
+			return $u;
+		}
+	}
+	return null;
+}
+
+function userForHost($host) {
+  global $users;
+  
+	foreach($users as $u) {
+	  $userHost = property_exists($u->properties, 'url') ? preg_replace('/https?:\/\//','', strtolower($u->properties->url[0])) : false;
+		if($userHost && $userHost == strtolower($host)) {
 			return $u;
 		}
 	}

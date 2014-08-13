@@ -98,10 +98,10 @@ if(array_key_exists('timestamp', $_GET)) {
 	#$cacheFile = dirname(__FILE__).'/cache/'.intval($_GET['timestamp']).'.html';
 	#respondFromCache($cacheFile);
 	
-	$logs = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp >= :min AND timestamp < :max AND hide=0 ORDER BY datestamp');
+	$logs = db()->prepare('SELECT * FROM irclog WHERE channel="#indiewebcamp" AND timestamp >= :min AND timestamp < :max AND hide=0 ORDER BY timestamp');
 	#$logs->bindParam(':day', $date);
-	$logs->bindParam(':min', strtotime($date.' 00:00:00'));
-	$logs->bindParam(':max', strtotime($date.' 23:59:59'));
+	$logs->bindValue(':min', strtotime($date.' 00:00:00')*1000);
+	$logs->bindValue(':max', strtotime($date.' 23:59:59')*1000);
 	$logs->execute();
 
 }
@@ -122,7 +122,7 @@ ob_start();
 	<title>#indiewebcamp <?=$dateTitle?></title>
 	<style type="text/css">
 	body {
-		font-family: monaco, courier new, fixed-width;
+		font-family: "Helvetica Neue", sans-serif;
 		font-size: 10pt;
 		margin: 0;
 		padding: 0;
@@ -134,11 +134,14 @@ ob_start();
   	color: #BBB;
   	text-decoration: none;
 	}
+	.line {
+  	min-height: 22px;
+	}
 	.msg-join, .msg-join a {
 		color: #bbb;
 	}
-	.msg-wiki, .msg-wiki a {
-		color: #542b76;
+	.msg-wiki, .msg-wiki a, .msg-wiki a.author {
+		color: #7e3db4;
 	}
 	.msg-twitter.retweet {
 		opacity: 0.5;
@@ -154,6 +157,21 @@ ob_start();
 	}
 	.msg-twitter a.author {
   	color: #2087e1;
+	}
+	.author {
+  	font-weight: bold;
+	}
+	.avatar {
+    margin-right: 3px;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    display: inline-block;
+	}
+	.avatar img {
+    -webkit-border-radius: 3px;
+    -moz-border-radius: 3px;
+    border-radius: 3px;
+    vertical-align: middle;
 	}
 	
 	.topbar {
@@ -322,18 +340,17 @@ ob_start();
 	<?php } ?>
 </div>
 
-<script type="text/javascript" src="/irc/jquery-1.10.1.min.js"></script>
 <script type="text/javascript">
-$(function(){
-	if(window.location.hash) { // has a # already, convenient :)
-		$(window.location.hash).addClass('hilite');
+	if(window.location.hash) {
+		var n = document.getElementById(window.location.hash.replace('#',''));
+		n.classList.add('hilite');
 	}
 	window.addEventListener("hashchange", function(){
-	  $(".line").removeClass('hilite');
-	  console.log(window.location.hash);
-		$(window.location.hash).addClass('hilite');
+	  var n = document.getElementsByClassName('line');
+	  Array.prototype.filter.call(n, function(el){ el.classList.remove('hilite') });
+		var n = document.getElementById(window.location.hash.replace('#',''));
+		n.classList.add('hilite');
 	}, false);
-});
 </script>
 </body>
 </html>
