@@ -99,7 +99,7 @@ function formatLine($line, $mf=true) {
   	  $avatar = '<div class="avatar"><img src="' . $user->properties->photo[0] . '" width="20" height="20"></div>';
 	  }
 		$who = $avatar . '<span class="' . ($mf ? 'p-author h-card' : '') . '">'
-			. '<a href="' . @$user->properties->url[0] . '" class="author ' . ($mf ? 'p-nickname p-name u-url' : '') . '">' . $line['nick'] . '</a>'
+			. '<a href="' . @$user->properties->url[0] . '" class="author ' . ($mf ? 'p-nickname p-name u-url' : '') . ' target="_blank">' . $line['nick'] . '</a>'
 			. '</span>';
 	} else {
 		$who = $avatar . '<span class="' . ($mf ? 'p-author h-card' : '') . '">'
@@ -121,11 +121,11 @@ function formatLine($line, $mf=true) {
     	  $avatar = $blank_avatar;
   	  }
   		$who = $avatar . '<span class="' . ($mf ? 'p-author h-card' : '') . '">'
-  		  . '<a class="author ' . ($mf ? 'p-nickname p-name' : '') . '" href="http://' . strtolower($match['user']) . '">' . strtolower($match['user']) . '</a>'
+  		  . '<a class="author ' . ($mf ? 'p-nickname p-name' : '') . '" href="http://' . strtolower($match['user']) . '" target="_blank">' . strtolower($match['user']) . '</a>'
   		  . '</span>';
 		} else {
   		$who = $blank_avatar . '<span class="' . ($mf ? 'p-author h-card' : '') . '">'
-  		  . '<a class="author ' . ($mf ? 'p-nickname p-name' : '') . '" href="http://' . strtolower($match['user']) . '">' . strtolower($match['user']) . '</a>'
+  		  . '<a class="author ' . ($mf ? 'p-nickname p-name' : '') . '" href="http://' . strtolower($match['user']) . '" target="_blank">' . strtolower($match['user']) . '</a>'
   		  . '</span>';
 		}
 
@@ -156,7 +156,7 @@ function formatLine($line, $mf=true) {
 		$line['type'] = 'twitter';
 		$line['line'] = str_replace(array($match[0].':: ',$match[0]), '', $line['line']);
 		$avatar = '<div class="avatar"><img src="http://twitter.com/' . $match[1] . '/profile_image" width="20"></div>';
-		$who = $avatar . '<a href="http://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card p-url' : '') . '">@<span class="p-name p-nickname">' . $match[1] . '</span></a>';
+		$who = $avatar . '<a href="http://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card p-url' : '') . '" target="_blank">@<span class="p-name p-nickname">' . $match[1] . '</span></a>';
 	}
 
 	// New tweets
@@ -165,7 +165,7 @@ function formatLine($line, $mf=true) {
 		$line['line'] = $match[2];
 		$permalink = $match[3];
 		$avatar = '<div class="avatar"><img src="http://twitter.com/' . $match[1] . '/profile_image" width="20"></div>';
-		$who = $avatar . '<a href="https://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card' : '') . '">@<span class="p-name p-nickname">' . $match[1] . '</span></a>';
+		$who = $avatar . '<a href="https://twitter.com/' . $match[1] . '" class="author ' . ($mf ? 'p-author h-card' : '') . '" target="_blank">@<span class="p-name p-nickname">' . $match[1] . '</span></a>';
 	}
 
   // Ugly hack for Loqi ACTIONs
@@ -212,9 +212,9 @@ function formatLine($line, $mf=true) {
 		echo '</span>';
 		
 		if($line['type'] == 'twitter') {
-  		echo ' (<a href="' . $permalink . '" class="u-url">' . preg_replace('/https?:\/\//', '', $permalink) . '</a>)';
+  		echo ' (<a href="' . $permalink . '" class="u-url" target="_blank">' . preg_replace('/https?:\/\//', '', $permalink) . '</a>)';
 		} elseif($line['type'] == 'wiki') {
-  		echo ' (<a href="' . $line['diff'] . '" class="u-url">view diff</a>)';
+  		echo ' (<a href="' . $line['diff'] . '" class="u-url" target="_blank">view diff</a>)';
 		}
 		
 	echo "</div>\n";
